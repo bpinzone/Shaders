@@ -40,34 +40,25 @@
 
 
             // ======= Helpers for points on object. ============
+
             /*
-            Returns the angle in degrees [0-180] between the two vectors:
-                (1) Object anchor to camera
-                (2) The pixel's world normal
+                Given v2f, compute the distance from the center of the orb to this pixel. Normalized [0, 1]. Its apparent clipping distance.
+                Center is 0. Edge is 1.
+                Returns -1 for degrees greater than 90.
             */
-            float get_normal_relative_view_degrees(v2f i) {
+            float get_normalized_distance_from_center(v2f i){
 
                 float3 object_world_pos = transpose(unity_ObjectToWorld)[3].xyz;
                 float3 camera_world_pos = _WorldSpaceCameraPos;
 
                 float3 object_to_camera_normalized = normalize(camera_world_pos - object_world_pos);
 
+                // Compute the angle between the vectors: (1) object anchor to camera. (2) pixel's world normal.
                 // Range: [-1, 1] and is = cos(theta)
-                float dotp = dot(normalize(i.world_normal), object_to_camera_normalized);
-                float angle_radians = acos(dotp);
-
+                float dotp = dot(object_to_camera_normalized, normalize(i.world_normal));
                 // Range: [0, 180]
-                return degrees(angle_radians);
-            }
+                float angle_degrees = degrees(acos(dotp));
 
-
-            /*
-                Given v2f, convert an angle given by "get_normal_relative_view_degrees"
-                to a normalized (0-1) distance (apparent, clipping) from the center for a pixel.
-                Returns -1 for degrees greater than 90.
-            */
-            float get_normalized_distance_from_center(v2f i){
-                float angle_degrees = get_normal_relative_view_degrees(i);
                 return angle_degrees > 90 ? -1 : angle_degrees / 90;
             }
 
@@ -105,44 +96,50 @@
 
             fixed4 frag (v2f i) : SV_Target {
 
+                // These are [0, 1]
                 // Our normalized position from center.
-                float pos = get_normalized_distance_from_center(i);
+                float pixel_pos = get_normalized_distance_from_center(i);
                 // Wave normalized position from center
                 float wave_pos = get_wave_pos_normalized();
 
                 bool is_wave_going_out = get_wave_going_out();
-                bool is_wave_closer_to_center = wave_pos < pos;
+                bool is_wave_closer_to_center = wave_pos < pixel_pos;
 
                 // In range: [0, 2]
-                // Time since the wave last passed through this point.
+                // Time since the wave last passed through this pixel.
+                // Proportional to the ground the wave covered since it last touched us.
                 float rel_time_since_touch;
 
-                // Wave is going out
                 if(is_wave_going_out){
-                    // Wave is closer
                     if(is_wave_closer_to_center){
-                        rel_time_since_touch = pos + wave_pos;
+                        // Wave is closer to center, moving toward us.
+                        rel_time_since_touch = pixel_pos + wave_pos;
                     }
-                    // Wave is farther
                     else{
-                        rel_time_since_touch = wave_pos - pos;
+                        // Wave is farther out, moving away from us.
+                        rel_time_since_touch = wave_pos - pixel_pos;
                     }
                 }
-                // Wave is going in
                 else{
-                    // Wave is closer
                     if(is_wave_closer_to_center){
-                        rel_time_since_touch = pos - wave_pos;
+                        // Wave is closer to center, moving away from us.
+                        rel_time_since_touch = pixel_pos - wave_pos;
                     }
-                    // Wave is farther
                     else{
-                        rel_time_since_touch = (1 - pos) + (1 - wave_pos);
+                        // Wave is farther out, moving toward us.
+
+                        // Distance from center --->
+                        /* center     pix_p     <-wave_p     edge
+                           |             ********************|     plus
+                           |                      ***********|     = Covered ground  */
+                        rel_time_since_touch = (1 - pixel_pos) + (1 - wave_pos);
                     }
                 }
 
                 float rel_time_since_touch_normalized = rel_time_since_touch / 2;
                 float wave_intensity = 1 - rel_time_since_touch_normalized;
                 if(rel_time_since_touch_normalized >= edge_hardness){
+                    // Find more efficient way.
                     wave_intensity = pow(wave_intensity, wake_drop_off);
                 }
 
