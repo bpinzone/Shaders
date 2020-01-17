@@ -1,4 +1,9 @@
-﻿Shader "Unlit/SurfaceNormalWave" {
+﻿
+// SEE IT IN ACTION!
+// https://www.benpinzone.io/images/blue-red-normal-wave.gif
+// https://www.benpinzone.io/images/green-normal-wave.gif
+
+Shader "Unlit/SurfaceNormalWave" {
 
     Properties {
         base_color ("Base Color", Color) = (0,0,0,1)
